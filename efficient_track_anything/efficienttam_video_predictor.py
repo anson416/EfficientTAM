@@ -4,23 +4,21 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import warnings
 from collections import OrderedDict
 
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 
 from efficient_track_anything.modeling.efficienttam_base import (
-    EfficientTAMBase,
     NO_OBJ_SCORE,
+    EfficientTAMBase,
 )
 from efficient_track_anything.utils.misc import (
     concat_points,
     fill_holes_in_mask_scores,
     load_video_frames,
 )
-
-from tqdm import tqdm
 
 
 class EfficientTAMVideoPredictor(EfficientTAMBase):
@@ -43,7 +41,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         self.fill_hole_area = fill_hole_area
         self.non_overlap_masks = non_overlap_masks
         self.clear_non_cond_mem_around_input = clear_non_cond_mem_around_input
-        self.add_all_frames_to_correct_as_cond = add_all_frames_to_correct_as_cond
+        self.add_all_frames_to_correct_as_cond = (
+            add_all_frames_to_correct_as_cond
+        )
 
     @torch.inference_mode()
     def init_state(
@@ -106,7 +106,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         return inference_state
 
     @classmethod
-    def from_pretrained(cls, model_id: str, **kwargs) -> "EfficientTAMVideoPredictor":
+    def from_pretrained(
+        cls, model_id: str, **kwargs
+    ) -> "EfficientTAMVideoPredictor":
         """
         Load a pretrained model from the Hugging Face hub.
 
@@ -121,7 +123,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             build_efficienttam_video_predictor_hf,
         )
 
-        efficienttam_model = build_efficienttam_video_predictor_hf(model_id, **kwargs)
+        efficienttam_model = build_efficienttam_video_predictor_hf(
+            model_id, **kwargs
+        )
         return efficienttam_model
 
     def _obj_id_to_idx(self, inference_state, obj_id):
@@ -180,13 +184,17 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
     ):
         """Add new points to a frame."""
         obj_idx = self._obj_id_to_idx(inference_state, obj_id)
-        point_inputs_per_frame = inference_state["point_inputs_per_obj"][obj_idx]
+        point_inputs_per_frame = inference_state["point_inputs_per_obj"][
+            obj_idx
+        ]
         mask_inputs_per_frame = inference_state["mask_inputs_per_obj"][obj_idx]
 
         if (points is not None) != (labels is not None):
             raise ValueError("points and labels must be provided together")
         if points is None and box is None:
-            raise ValueError("at least one of points or box must be provided as input")
+            raise ValueError(
+                "at least one of points or box must be provided as input"
+            )
 
         if points is None:
             points = torch.zeros(0, 2, dtype=torch.float32)
@@ -211,9 +219,13 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                     "(please use clear_old_points=True instead)"
                 )
             if not isinstance(box, torch.Tensor):
-                box = torch.tensor(box, dtype=torch.float32, device=points.device)
+                box = torch.tensor(
+                    box, dtype=torch.float32, device=points.device
+                )
             box_coords = box.reshape(1, 2, 2)
-            box_labels = torch.tensor([2, 3], dtype=torch.int32, device=labels.device)
+            box_labels = torch.tensor(
+                [2, 3], dtype=torch.int32, device=labels.device
+            )
             box_labels = box_labels.reshape(1, 2)
             points = torch.cat([box_coords, points], dim=1)
             labels = torch.cat([box_labels, labels], dim=1)
@@ -221,7 +233,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         if normalize_coords:
             video_H = inference_state["video_height"]
             video_W = inference_state["video_width"]
-            points = points / torch.tensor([video_W, video_H]).to(points.device)
+            points = points / torch.tensor([video_W, video_H]).to(
+                points.device
+            )
         # scale the (normalized) coordinates by the model's internal image size
         points = points * self.image_size
         points = points.to(inference_state["device"])
@@ -247,11 +261,15 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         else:
             reverse = obj_frames_tracked[frame_idx]["reverse"]
         obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
-        obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][obj_idx]
+        obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][
+            obj_idx
+        ]
         # Add a frame to conditioning output if it's an initial conditioning frame or
         # if the model sees all frames receiving clicks/mask as conditioning frames.
         is_cond = is_init_cond_frame or self.add_all_frames_to_correct_as_cond
-        storage_key = "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+        storage_key = (
+            "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+        )
 
         # Get any previously predicted mask logits on this object and feed it along with
         # the new clicks into the SAM mask decoder.
@@ -262,13 +280,19 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         if prev_out is None:
             prev_out = obj_output_dict["cond_frame_outputs"].get(frame_idx)
             if prev_out is None:
-                prev_out = obj_output_dict["non_cond_frame_outputs"].get(frame_idx)
+                prev_out = obj_output_dict["non_cond_frame_outputs"].get(
+                    frame_idx
+                )
 
         if prev_out is not None and prev_out["pred_masks"] is not None:
             device = inference_state["device"]
-            prev_sam_mask_logits = prev_out["pred_masks"].to(device, non_blocking=True)
+            prev_sam_mask_logits = prev_out["pred_masks"].to(
+                device, non_blocking=True
+            )
             # Clamp the scale of prev_sam_mask_logits to avoid rare numerical issues.
-            prev_sam_mask_logits = torch.clamp(prev_sam_mask_logits, -32.0, 32.0)
+            prev_sam_mask_logits = torch.clamp(
+                prev_sam_mask_logits, -32.0, 32.0
+            )
         current_out, _ = self._run_single_frame_inference(
             inference_state=inference_state,
             output_dict=obj_output_dict,  # run on the slice of a single object
@@ -315,7 +339,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
     ):
         """Add new mask to a frame."""
         obj_idx = self._obj_id_to_idx(inference_state, obj_id)
-        point_inputs_per_frame = inference_state["point_inputs_per_obj"][obj_idx]
+        point_inputs_per_frame = inference_state["point_inputs_per_obj"][
+            obj_idx
+        ]
         mask_inputs_per_frame = inference_state["mask_inputs_per_obj"][obj_idx]
 
         if not isinstance(mask, torch.Tensor):
@@ -323,7 +349,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         assert mask.dim() == 2
         mask_H, mask_W = mask.shape
         mask_inputs_orig = mask[None, None]  # add batch and channel dimension
-        mask_inputs_orig = mask_inputs_orig.float().to(inference_state["device"])
+        mask_inputs_orig = mask_inputs_orig.float().to(
+            inference_state["device"]
+        )
 
         # resize the mask if it doesn't match the model's image size
         if mask_H != self.image_size or mask_W != self.image_size:
@@ -352,11 +380,15 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         else:
             reverse = obj_frames_tracked[frame_idx]["reverse"]
         obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
-        obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][obj_idx]
+        obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][
+            obj_idx
+        ]
         # Add a frame to conditioning output if it's an initial conditioning frame or
         # if the model sees all frames receiving clicks/mask as conditioning frames.
         is_cond = is_init_cond_frame or self.add_all_frames_to_correct_as_cond
-        storage_key = "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+        storage_key = (
+            "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+        )
 
         current_out, _ = self._run_single_frame_inference(
             inference_state=inference_state,
@@ -408,7 +440,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                 align_corners=False,
             )
         if self.non_overlap_masks:
-            video_res_masks = self._apply_non_overlapping_constraints(video_res_masks)
+            video_res_masks = self._apply_non_overlapping_constraints(
+                video_res_masks
+            )
         return any_res_masks, video_res_masks
 
     def _consolidate_temp_output_across_obj(
@@ -428,7 +462,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
            on the object scores.
         """
         batch_size = self._get_obj_num(inference_state)
-        storage_key = "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+        storage_key = (
+            "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+        )
         # Optionally, we allow consolidating the temporary outputs at the original
         # video resolution (to provide a better editing experience for mask prompts).
         if consolidate_at_video_res:
@@ -452,7 +488,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             ),
         }
         for obj_idx in range(batch_size):
-            obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][obj_idx]
+            obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][
+                obj_idx
+            ]
             obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
             out = obj_temp_output_dict[storage_key].get(frame_idx, None)
             # If the object doesn't appear in "temp_output_dict_per_obj" on this frame,
@@ -460,9 +498,13 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             # We look up both "cond_frame_outputs" and "non_cond_frame_outputs" in
             # "output_dict_per_obj" to find a previous output for this object.
             if out is None:
-                out = obj_output_dict["cond_frame_outputs"].get(frame_idx, None)
+                out = obj_output_dict["cond_frame_outputs"].get(
+                    frame_idx, None
+                )
             if out is None:
-                out = obj_output_dict["non_cond_frame_outputs"].get(frame_idx, None)
+                out = obj_output_dict["non_cond_frame_outputs"].get(
+                    frame_idx, None
+                )
             # If the object doesn't appear in "output_dict_per_obj" either, we skip it
             # and leave its mask scores to the default scores (i.e. the NO_OBJ_SCORE
             # placeholder above) and set its object pointer to be a dummy pointer.
@@ -481,7 +523,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                     mode="bilinear",
                     align_corners=False,
                 )
-                consolidated_pred_masks[obj_idx : obj_idx + 1] = resized_obj_mask
+                consolidated_pred_masks[obj_idx : obj_idx + 1] = (
+                    resized_obj_mask
+                )
 
         return consolidated_out
 
@@ -499,16 +543,22 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         # add them into "output_dict".
         for obj_idx in range(batch_size):
             obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
-            obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][obj_idx]
+            obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][
+                obj_idx
+            ]
             for is_cond in [False, True]:
                 # Separately consolidate conditioning and non-conditioning temp outputs
                 storage_key = (
-                    "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
+                    "cond_frame_outputs"
+                    if is_cond
+                    else "non_cond_frame_outputs"
                 )
                 # Find all the frames that contain temporary outputs for any objects
                 # (these should be the frames that have just received clicks for mask inputs
                 # via `add_new_points_or_box` or `add_new_mask`)
-                for frame_idx, out in obj_temp_output_dict[storage_key].items():
+                for frame_idx, out in obj_temp_output_dict[
+                    storage_key
+                ].items():
                     # Run memory encoder on the temporary outputs (if the memory feature is missing)
                     if out["maskmem_features"] is None:
                         high_res_masks = torch.nn.functional.interpolate(
@@ -517,14 +567,16 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                             mode="bilinear",
                             align_corners=False,
                         )
-                        maskmem_features, maskmem_pos_enc = self._run_memory_encoder(
-                            inference_state=inference_state,
-                            frame_idx=frame_idx,
-                            batch_size=1,  # run on the slice of a single object
-                            high_res_masks=high_res_masks,
-                            object_score_logits=out["object_score_logits"],
-                            # these frames are what the user interacted with
-                            is_mask_from_pts=True,
+                        maskmem_features, maskmem_pos_enc = (
+                            self._run_memory_encoder(
+                                inference_state=inference_state,
+                                frame_idx=frame_idx,
+                                batch_size=1,  # run on the slice of a single object
+                                high_res_masks=high_res_masks,
+                                object_score_logits=out["object_score_logits"],
+                                # these frames are what the user interacted with
+                                is_mask_from_pts=True,
+                            )
                         )
                         out["maskmem_features"] = maskmem_features
                         out["maskmem_pos_enc"] = maskmem_pos_enc
@@ -571,7 +623,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             # default: start from the earliest frame with input points
             start_frame_idx = min(
                 t
-                for obj_output_dict in inference_state["output_dict_per_obj"].values()
+                for obj_output_dict in inference_state[
+                    "output_dict_per_obj"
+                ].values()
                 for t in obj_output_dict["cond_frame_outputs"]
             )
         if max_frame_num_to_track is None:
@@ -580,7 +634,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         if reverse:
             end_frame_idx = max(start_frame_idx - max_frame_num_to_track, 0)
             if start_frame_idx > 0:
-                processing_order = range(start_frame_idx, end_frame_idx - 1, -1)
+                processing_order = range(
+                    start_frame_idx, end_frame_idx - 1, -1
+                )
             else:
                 processing_order = []  # skip reverse tracking if starting from frame 0
         else:
@@ -592,7 +648,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         for frame_idx in tqdm(processing_order, desc="propagate in video"):
             pred_masks_per_obj = [None] * batch_size
             for obj_idx in range(batch_size):
-                obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
+                obj_output_dict = inference_state["output_dict_per_obj"][
+                    obj_idx
+                ]
                 # We skip those frames already in consolidated outputs (these are frames
                 # that received input clicks or mask). Note that we cannot directly run
                 # batched forward on them via `_run_single_frame_inference` because the
@@ -601,7 +659,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                     storage_key = "cond_frame_outputs"
                     current_out = obj_output_dict[storage_key][frame_idx]
                     device = inference_state["device"]
-                    pred_masks = current_out["pred_masks"].to(device, non_blocking=True)
+                    pred_masks = current_out["pred_masks"].to(
+                        device, non_blocking=True
+                    )
                     if self.clear_non_cond_mem_around_input:
                         # clear non-conditioning memory of the surrounding frames
                         self._clear_obj_non_cond_mem_around_input(
@@ -622,9 +682,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                     )
                     obj_output_dict[storage_key][frame_idx] = current_out
 
-                inference_state["frames_tracked_per_obj"][obj_idx][frame_idx] = {
-                    "reverse": reverse
-                }
+                inference_state["frames_tracked_per_obj"][obj_idx][
+                    frame_idx
+                ] = {"reverse": reverse}
                 pred_masks_per_obj[obj_idx] = pred_masks
 
             # Resize the output mask to the original video resolution (we directly use
@@ -650,8 +710,12 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         inference_state["mask_inputs_per_obj"][obj_idx].pop(frame_idx, None)
 
         temp_output_dict_per_obj = inference_state["temp_output_dict_per_obj"]
-        temp_output_dict_per_obj[obj_idx]["cond_frame_outputs"].pop(frame_idx, None)
-        temp_output_dict_per_obj[obj_idx]["non_cond_frame_outputs"].pop(frame_idx, None)
+        temp_output_dict_per_obj[obj_idx]["cond_frame_outputs"].pop(
+            frame_idx, None
+        )
+        temp_output_dict_per_obj[obj_idx]["non_cond_frame_outputs"].pop(
+            frame_idx, None
+        )
 
         # Remove the frame's conditioning output (possibly downgrading it to non-conditioning)
         obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
@@ -660,7 +724,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             # The frame is not a conditioning frame anymore since it's not receiving inputs,
             # so we "downgrade" its output (if exists) to a non-conditioning frame output.
             obj_output_dict["non_cond_frame_outputs"][frame_idx] = out
-            inference_state["frames_tracked_per_obj"][obj_idx].pop(frame_idx, None)
+            inference_state["frames_tracked_per_obj"][obj_idx].pop(
+                frame_idx, None
+            )
 
         if not need_output:
             return
@@ -719,11 +785,18 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         if backbone_out is None:
             # Cache miss -- we will run inference on a single image
             device = inference_state["device"]
-            image = inference_state["images"][frame_idx].to(device).float().unsqueeze(0)
+            image = (
+                inference_state["images"][frame_idx]
+                .to(device)
+                .float()
+                .unsqueeze(0)
+            )
             backbone_out = self.forward_image(image)
             # Cache the most recent frame's feature (for repeated interactions with
             # a frame; we can use an LRU cache for more frames in the future).
-            inference_state["cached_features"] = {frame_idx: (image, backbone_out)}
+            inference_state["cached_features"] = {
+                frame_idx: (image, backbone_out)
+            }
 
         # expand the features to have the same dimension as the number of objects
         expanded_image = image.expand(batch_size, -1, -1, -1)
@@ -788,7 +861,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         maskmem_features = current_out["maskmem_features"]
         if maskmem_features is not None:
             maskmem_features = maskmem_features.to(torch.bfloat16)
-            maskmem_features = maskmem_features.to(storage_device, non_blocking=True)
+            maskmem_features = maskmem_features.to(
+                storage_device, non_blocking=True
+            )
         pred_masks_gpu = current_out["pred_masks"]
         # potentially fill holes in the predicted masks
         if self.fill_hole_area > 0:
@@ -797,7 +872,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             )
         pred_masks = pred_masks_gpu.to(storage_device, non_blocking=True)
         # "maskmem_pos_enc" is the same across frames, so we only need to store one copy of it
-        maskmem_pos_enc = self._get_maskmem_pos_enc(inference_state, current_out)
+        maskmem_pos_enc = self._get_maskmem_pos_enc(
+            inference_state, current_out
+        )
         # object pointer is a small tensor, so we always keep it on GPU memory for fast access
         obj_ptr = current_out["obj_ptr"]
         object_score_logits = current_out["object_score_logits"]
@@ -840,7 +917,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         # optionally offload the output to CPU memory to save GPU space
         storage_device = inference_state["storage_device"]
         maskmem_features = maskmem_features.to(torch.bfloat16)
-        maskmem_features = maskmem_features.to(storage_device, non_blocking=True)
+        maskmem_features = maskmem_features.to(
+            storage_device, non_blocking=True
+        )
         # "maskmem_pos_enc" is the same across frames, so we only need to store one copy of it
         maskmem_pos_enc = self._get_maskmem_pos_enc(
             inference_state, {"maskmem_pos_enc": maskmem_pos_enc}
@@ -873,7 +952,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         return expanded_maskmem_pos_enc
 
     @torch.inference_mode()
-    def remove_object(self, inference_state, obj_id, strict=False, need_output=True):
+    def remove_object(
+        self, inference_state, obj_id, strict=False, need_output=True
+    ):
         """
         Remove an object id from the tracking state. If strict is True, we check whether
         the object id actually exists and raise an error if it doesn't exist.
@@ -943,7 +1024,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         # Step 3: Further collect the outputs on those frames in `obj_input_frames_inds`, which
         # could show an updated mask for objects previously occluded by the object being removed
         if need_output:
-            temp_output_dict_per_obj = inference_state["temp_output_dict_per_obj"]
+            temp_output_dict_per_obj = inference_state[
+                "temp_output_dict_per_obj"
+            ]
             for frame_idx in obj_input_frames_inds:
                 is_cond = any(
                     frame_idx in obj_temp_output_dict["cond_frame_outputs"]
@@ -990,7 +1073,9 @@ class EfficientTAMVideoPredictorVOS(EfficientTAMVideoPredictor):
         self._compile_all_components()
 
     def _compile_all_components(self):
-        print("Compiling all components for VOS setting. First time may be very slow.")
+        print(
+            "Compiling all components for VOS setting. First time may be very slow."
+        )
         self.memory_encoder.forward = torch.compile(
             self.memory_encoder.forward,
             mode="max-autotune",
@@ -1027,7 +1112,9 @@ class EfficientTAMVideoPredictorVOS(EfficientTAMVideoPredictor):
         backbone_out = self.image_encoder(img_batch)
         # Clone to help torch.compile
         for i in range(len(backbone_out["backbone_fpn"])):
-            backbone_out["backbone_fpn"][i] = backbone_out["backbone_fpn"][i].clone()
+            backbone_out["backbone_fpn"][i] = backbone_out["backbone_fpn"][
+                i
+            ].clone()
             backbone_out["vision_pos_enc"][i] = backbone_out["vision_pos_enc"][
                 i
             ].clone()
@@ -1055,18 +1142,28 @@ class EfficientTAMVideoPredictorVOS(EfficientTAMVideoPredictor):
         if point_inputs is not None:
             sam_point_coords = point_inputs["point_coords"]
             sam_point_labels = point_inputs["point_labels"]
-            assert sam_point_coords.size(0) == B and sam_point_labels.size(0) == B
+            assert (
+                sam_point_coords.size(0) == B and sam_point_labels.size(0) == B
+            )
         else:
             # If no points are provide, pad with an empty point (with label -1)
             sam_point_coords = torch.zeros(B, 1, 2, device=device)
-            sam_point_labels = -torch.ones(B, 1, dtype=torch.int32, device=device)
+            sam_point_labels = -torch.ones(
+                B, 1, dtype=torch.int32, device=device
+            )
 
         # b) Handle mask prompts
         if mask_inputs is not None:
             # If mask_inputs is provided, downsize it into low-res mask input if needed
             # and feed it as a dense mask prompt into the SAM mask encoder
-            assert len(mask_inputs.shape) == 4 and mask_inputs.shape[:2] == (B, 1)
-            if mask_inputs.shape[-2:] != self.sam_prompt_encoder.mask_input_size:
+            assert len(mask_inputs.shape) == 4 and mask_inputs.shape[:2] == (
+                B,
+                1,
+            )
+            if (
+                mask_inputs.shape[-2:]
+                != self.sam_prompt_encoder.mask_input_size
+            ):
                 sam_mask_prompt = F.interpolate(
                     mask_inputs.float(),
                     size=self.sam_prompt_encoder.mask_input_size,
@@ -1138,12 +1235,19 @@ class EfficientTAMVideoPredictorVOS(EfficientTAMVideoPredictor):
             # take the best mask prediction (with the highest IoU estimation)
             best_iou_inds = torch.argmax(ious, dim=-1)
             batch_inds = torch.arange(B, device=device)
-            low_res_masks = low_res_multimasks[batch_inds, best_iou_inds].unsqueeze(1)
-            high_res_masks = high_res_multimasks[batch_inds, best_iou_inds].unsqueeze(1)
+            low_res_masks = low_res_multimasks[
+                batch_inds, best_iou_inds
+            ].unsqueeze(1)
+            high_res_masks = high_res_multimasks[
+                batch_inds, best_iou_inds
+            ].unsqueeze(1)
             if sam_output_tokens.size(1) > 1:
                 sam_output_token = sam_output_tokens[batch_inds, best_iou_inds]
         else:
-            low_res_masks, high_res_masks = low_res_multimasks, high_res_multimasks
+            low_res_masks, high_res_masks = (
+                low_res_multimasks,
+                high_res_multimasks,
+            )
 
         # Extract object pointer from the SAM output token (with occlusion handling)
         obj_ptr = self.obj_ptr_proj(sam_output_token)
@@ -1205,7 +1309,9 @@ class EfficientTAMVideoPredictorVOS(EfficientTAMVideoPredictor):
         if self.sigmoid_bias_for_mem_enc != 0.0:
             mask_for_mem = mask_for_mem + self.sigmoid_bias_for_mem_enc
         maskmem_out = self.memory_encoder(
-            pix_feat, mask_for_mem, skip_mask_sigmoid=True  # sigmoid already applied
+            pix_feat,
+            mask_for_mem,
+            skip_mask_sigmoid=True,  # sigmoid already applied
         )
         # Clone the feats and pos_enc to enable compilation
         maskmem_features = maskmem_out["vision_features"].clone()

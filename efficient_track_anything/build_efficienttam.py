@@ -7,15 +7,17 @@
 import logging
 import os
 
-import efficient_track_anything
-
 import torch
 from hydra import compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
+import efficient_track_anything
+
 if os.path.isdir(
-    os.path.join(efficient_track_anything.__path__[0], "efficient_track_anything")
+    os.path.join(
+        efficient_track_anything.__path__[0], "efficient_track_anything"
+    )
 ):
     raise RuntimeError(
         "You're likely running Python from the parent directory of the EfficientTAM repository "
@@ -70,7 +72,6 @@ def build_efficienttam(
     apply_postprocessing=True,
     **kwargs,
 ):
-
     if apply_postprocessing:
         hydra_overrides_extra = hydra_overrides_extra.copy()
         hydra_overrides_extra += [
@@ -100,7 +101,10 @@ def build_efficienttam_video_predictor(
     vos_optimized=False,
     **kwargs,
 ):
-    if not torch.cuda.is_available() or torch.cuda.get_device_properties(0).major < 8:
+    if (
+        not torch.cuda.is_available()
+        or torch.cuda.get_device_properties(0).major < 8
+    ):
         print("Disable torch compile due to unsupported GPU.")
         hydra_overrides_extra = ["++model.compile_image_encoder=False"]
         vos_optimized = False
@@ -150,7 +154,9 @@ def _hf_download(model_id):
 
 def build_efficienttam_hf(model_id, **kwargs):
     config_name, ckpt_path = _hf_download(model_id)
-    return build_efficienttam(config_file=config_name, ckpt_path=ckpt_path, **kwargs)
+    return build_efficienttam(
+        config_file=config_name, ckpt_path=ckpt_path, **kwargs
+    )
 
 
 def build_efficienttam_video_predictor_hf(model_id, **kwargs):
@@ -162,7 +168,9 @@ def build_efficienttam_video_predictor_hf(model_id, **kwargs):
 
 def _load_checkpoint(model, ckpt_path):
     if ckpt_path is not None:
-        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)["model"]
+        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)[
+            "model"
+        ]
         missing_keys, unexpected_keys = model.load_state_dict(sd)
         if missing_keys:
             logging.error(missing_keys)
