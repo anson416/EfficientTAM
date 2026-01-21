@@ -4,3 +4,4 @@ frames_*
 *.egg-info
 __pycache__/
 checkpoints/*.pt
+.DS_Store
