@@ -137,18 +137,18 @@ class AsyncVideoFrameLoader:
         # to cache it (since it's most likely where the user will click)
         self.__getitem__(0)
 
-        # load the rest of frames asynchronously without blocking the session start
-        def _load_frames():
-            try:
-                for n in tqdm(
-                    range(len(self.images)), desc="frame loading (JPEG)"
-                ):
-                    self.__getitem__(n)
-            except Exception as e:
-                self.exception = e
+        # # load the rest of frames asynchronously without blocking the session start
+        # def _load_frames():
+        #     try:
+        #         for n in tqdm(
+        #             range(len(self.images)), desc="frame loading (JPEG)"
+        #         ):
+        #             self.__getitem__(n)
+        #     except Exception as e:
+        #         self.exception = e
 
-        self.thread = Thread(target=_load_frames, daemon=True)
-        self.thread.start()
+        # self.thread = Thread(target=_load_frames, daemon=True)
+        # self.thread.start()
 
     def __getitem__(self, index):
         if self.exception is not None:
@@ -170,7 +170,7 @@ class AsyncVideoFrameLoader:
         img /= self.img_std
         if not self.offload_video_to_cpu:
             img = img.to(self.compute_device, non_blocking=True)
-        self.images[index] = img
+        # self.images[index] = img
         return img
 
     def __len__(self):
