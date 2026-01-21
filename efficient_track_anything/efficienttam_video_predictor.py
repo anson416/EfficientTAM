@@ -682,6 +682,23 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                     )
                     obj_output_dict[storage_key][frame_idx] = current_out
 
+                    # Reference: https://github.com/facebookresearch/sam2/issues/196#issuecomment-2286352777
+                    # (Hacky) Delete old state data to clear space after '_run_single_frame_inference'
+                    keep = 16
+                    old_frame_idxs = [
+                        idx
+                        for idx in obj_output_dict[storage_key].keys()
+                        if (
+                            (not reverse and idx < frame_idx - keep)
+                            or (reverse and idx > frame_idx + keep)
+                        )
+                    ]
+                    for old_idx in old_frame_idxs:
+                        for obj_out in inference_state[
+                            "output_dict_per_obj"
+                        ].values():
+                            obj_out[storage_key].pop(old_idx, None)
+
                 inference_state["frames_tracked_per_obj"][obj_idx][
                     frame_idx
                 ] = {"reverse": reverse}
