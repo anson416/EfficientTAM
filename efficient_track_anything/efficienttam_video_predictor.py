@@ -610,6 +610,7 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         start_frame_idx=None,
         max_frame_num_to_track=None,
         reverse=False,
+        progress: bool = True,
     ):
         """Propagate the input points across frames to track in the entire video."""
         self.propagate_in_video_preflight(inference_state)
@@ -645,7 +646,12 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             )
             processing_order = range(start_frame_idx, end_frame_idx + 1)
 
-        for frame_idx in tqdm(processing_order, desc="propagate in video"):
+        for frame_idx in tqdm(
+            processing_order,
+            desc=f"Propagating (reverse={reverse})",
+            leave=False,
+            disable=not progress,
+        ):
             pred_masks_per_obj = [None] * batch_size
             for obj_idx in range(batch_size):
                 obj_output_dict = inference_state["output_dict_per_obj"][
