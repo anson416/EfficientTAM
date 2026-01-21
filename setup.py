@@ -116,7 +116,9 @@ def get_extensions():
         }
         ext_modules = [
             CUDAExtension(
-                "efficient_track_anything._C", srcs, extra_compile_args=compile_args
+                "efficient_track_anything._C",
+                srcs,
+                extra_compile_args=compile_args,
             )
         ]
     except Exception as e:
@@ -133,7 +135,6 @@ try:
     from torch.utils.cpp_extension import BuildExtension
 
     class BuildExtensionIgnoreErrors(BuildExtension):
-
         def finalize_options(self):
             try:
                 super().finalize_options()
