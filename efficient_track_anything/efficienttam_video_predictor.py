@@ -1108,7 +1108,7 @@ class EfficientTAMVideoPredictorVOS(EfficientTAMVideoPredictor):
 
         self.memory_attention.forward = torch.compile(
             self.memory_attention.forward,
-            mode="max-autotune",
+            mode="max-autotune-no-cudagraphs",
             fullgraph=True,
             dynamic=True,  # Num. of memories varies
         )
