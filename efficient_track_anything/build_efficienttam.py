@@ -105,9 +105,10 @@ def build_efficienttam_video_predictor(
         not torch.cuda.is_available()
         or torch.cuda.get_device_properties(0).major < 8
     ):
-        print("Disable torch compile due to unsupported GPU.")
         hydra_overrides_extra = ["++model.compile_image_encoder=False"]
-        vos_optimized = False
+        if vos_optimized:
+            print("Disable torch compile due to unsupported GPU.")
+            vos_optimized = False
 
     hydra_overrides = [
         "++model._target_=efficient_track_anything.efficienttam_video_predictor.EfficientTAMVideoPredictor",
