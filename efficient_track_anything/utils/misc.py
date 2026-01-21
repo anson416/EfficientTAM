@@ -27,7 +27,9 @@ def get_sdpa_settings():
             )
         # keep math kernel for PyTorch versions before 2.2 (Flash Attention v2 is only
         # available on PyTorch 2.2+, while Flash Attention v1 cannot handle all cases)
-        pytorch_version = tuple(int(v) for v in torch.__version__.split(".")[:2])
+        pytorch_version = tuple(
+            int(v) for v in torch.__version__.split(".")[:2]
+        )
         if pytorch_version < (2, 2):
             warnings.warn(
                 f"You are using PyTorch {torch.__version__} without Flash Attention v2 support. "
@@ -95,7 +97,9 @@ def _load_img_as_tensor(img_path, image_size):
     if img_np.dtype == np.uint8:  # np.uint8 is expected for JPEG images
         img_np = img_np / 255.0
     else:
-        raise RuntimeError(f"Unknown image dtype: {img_np.dtype} on {img_path}")
+        raise RuntimeError(
+            f"Unknown image dtype: {img_np.dtype} on {img_path}"
+        )
     img = torch.from_numpy(img_np).permute(2, 0, 1)
     video_width, video_height = img_pil.size  # the original video size
     return img, video_height, video_width
@@ -136,7 +140,9 @@ class AsyncVideoFrameLoader:
         # load the rest of frames asynchronously without blocking the session start
         def _load_frames():
             try:
-                for n in tqdm(range(len(self.images)), desc="frame loading (JPEG)"):
+                for n in tqdm(
+                    range(len(self.images)), desc="frame loading (JPEG)"
+                ):
                     self.__getitem__(n)
             except Exception as e:
                 self.exception = e
@@ -146,7 +152,9 @@ class AsyncVideoFrameLoader:
 
     def __getitem__(self, index):
         if self.exception is not None:
-            raise RuntimeError("Failure in frame loading thread") from self.exception
+            raise RuntimeError(
+                "Failure in frame loading thread"
+            ) from self.exception
 
         img = self.images[index]
         if img is not None:
@@ -184,7 +192,10 @@ def load_video_frames(
     """
     is_bytes = isinstance(video_path, bytes)
     is_str = isinstance(video_path, str)
-    is_mp4_path = is_str and os.path.splitext(video_path)[-1] in [".mp4", ".MP4"]
+    is_mp4_path = is_str and os.path.splitext(video_path)[-1] in [
+        ".mp4",
+        ".MP4",
+    ]
     if is_bytes or is_mp4_path:
         return load_video_frames_from_video_file(
             video_path=video_path,
@@ -249,7 +260,9 @@ def load_video_frames_from_jpg_images(
     num_frames = len(frame_names)
     if num_frames == 0:
         raise RuntimeError(f"no images found in {jpg_folder}")
-    img_paths = [os.path.join(jpg_folder, frame_name) for frame_name in frame_names]
+    img_paths = [
+        os.path.join(jpg_folder, frame_name) for frame_name in frame_names
+    ]
     img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
     img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
 
@@ -264,9 +277,13 @@ def load_video_frames_from_jpg_images(
         )
         return lazy_images, lazy_images.video_height, lazy_images.video_width
 
-    images = torch.zeros(num_frames, 3, image_size, image_size, dtype=torch.float32)
+    images = torch.zeros(
+        num_frames, 3, image_size, image_size, dtype=torch.float32
+    )
     for n, img_path in enumerate(tqdm(img_paths, desc="frame loading (JPEG)")):
-        images[n], video_height, video_width = _load_img_as_tensor(img_path, image_size)
+        images[n], video_height, video_width = _load_img_as_tensor(
+            img_path, image_size
+        )
     if not offload_video_to_cpu:
         images = images.to(compute_device)
         img_mean = img_mean.to(compute_device)
@@ -295,7 +312,9 @@ def load_video_frames_from_video_file(
     video_height, video_width, _ = decord.VideoReader(video_path).next().shape
     # Iterate over all frames in the video
     images = []
-    for frame in decord.VideoReader(video_path, width=image_size, height=image_size):
+    for frame in decord.VideoReader(
+        video_path, width=image_size, height=image_size
+    ):
         images.append(frame.permute(2, 0, 1))
 
     images = torch.stack(images, dim=0).float() / 255.0
@@ -341,7 +360,11 @@ def concat_points(old_point_inputs, new_points, new_labels):
     if old_point_inputs is None:
         points, labels = new_points, new_labels
     else:
-        points = torch.cat([old_point_inputs["point_coords"], new_points], dim=1)
-        labels = torch.cat([old_point_inputs["point_labels"], new_labels], dim=1)
+        points = torch.cat(
+            [old_point_inputs["point_coords"], new_points], dim=1
+        )
+        labels = torch.cat(
+            [old_point_inputs["point_labels"], new_labels], dim=1
+        )
 
     return {"point_coords": points, "point_labels": labels}
