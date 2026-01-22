@@ -6,6 +6,7 @@
 
 import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Thread
 
 import numpy as np
@@ -277,13 +278,29 @@ def load_video_frames_from_jpg_images(
         )
         return lazy_images, lazy_images.video_height, lazy_images.video_width
 
+    def _load_one(idx: int, path: str):
+        img, h, w = _load_img_as_tensor(path, image_size)
+        return idx, img, h, w
+
     images = torch.zeros(
         num_frames, 3, image_size, image_size, dtype=torch.float32
     )
-    for n, img_path in enumerate(tqdm(img_paths, desc="Loading frames")):
-        images[n], video_height, video_width = _load_img_as_tensor(
-            img_path, image_size
-        )
+    video_height, video_width = None, None
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = [ex.submit(_load_one, i, p) for i, p in enumerate(img_paths)]
+        try:
+            for fut in tqdm(
+                as_completed(futures), total=num_frames, desc="Loading frames"
+            ):
+                idx, img, h, w = fut.result()  # raises if the worker failed
+                if video_height is None:
+                    video_height, video_width = h, w
+                images[idx] = img
+        except Exception:
+            for f in futures:
+                f.cancel()
+            raise
+
     if not offload_video_to_cpu:
         images = images.to(compute_device)
         img_mean = img_mean.to(compute_device)
