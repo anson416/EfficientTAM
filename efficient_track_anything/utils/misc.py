@@ -285,6 +285,11 @@ def load_video_frames_from_jpg_images(
     images = torch.zeros(
         num_frames, 3, image_size, image_size, dtype=torch.float32
     )
+    if not offload_video_to_cpu:
+        images = images.to(compute_device)
+        img_mean = img_mean.to(compute_device)
+        img_std = img_std.to(compute_device)
+
     video_height, video_width = None, None
     with ThreadPoolExecutor(max_workers=8) as ex:
         futures = [ex.submit(_load_one, i, p) for i, p in enumerate(img_paths)]
@@ -295,16 +300,14 @@ def load_video_frames_from_jpg_images(
                 idx, img, h, w = fut.result()
                 if video_height is None:
                     video_height, video_width = h, w
+                if not offload_video_to_cpu:
+                    img = img.to(compute_device)
                 images[idx] = img
         except Exception:
             for f in futures:
                 f.cancel()
             raise
 
-    if not offload_video_to_cpu:
-        images = images.to(compute_device)
-        img_mean = img_mean.to(compute_device)
-        img_std = img_std.to(compute_device)
     # normalize by mean and std
     images -= img_mean
     images /= img_std
