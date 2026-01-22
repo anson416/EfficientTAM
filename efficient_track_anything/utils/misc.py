@@ -278,7 +278,7 @@ def load_video_frames_from_jpg_images(
         return lazy_images, lazy_images.video_height, lazy_images.video_width
 
     images = torch.zeros(
-        num_frames, 3, image_size, image_size, dtype=torch.float16
+        num_frames, 3, image_size, image_size, dtype=torch.float32
     )
     for n, img_path in enumerate(tqdm(img_paths, desc="Loading frames")):
         images[n], video_height, video_width = _load_img_as_tensor(
