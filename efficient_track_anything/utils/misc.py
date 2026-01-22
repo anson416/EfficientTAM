@@ -292,7 +292,7 @@ def load_video_frames_from_jpg_images(
             for fut in tqdm(
                 as_completed(futures), total=num_frames, desc="Loading frames"
             ):
-                idx, img, h, w = fut.result()  # raises if the worker failed
+                idx, img, h, w = fut.result()
                 if video_height is None:
                     video_height, video_width = h, w
                 images[idx] = img
