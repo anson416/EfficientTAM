@@ -173,8 +173,8 @@ class PrefetchVideoFrameLoader:
         img_mean: torch.Tensor,
         img_std: torch.Tensor,
         compute_device: torch.device,
-        prefetch_count: int = 16,
-        cache_size: int = 32,
+        prefetch_count: int = 32,
+        cache_size: int = 64,
         num_workers: int = 4,
     ):
         # Immutable configuration (safe to access from any thread)
@@ -318,10 +318,10 @@ class PrefetchVideoFrameLoader:
             idx = current_idx + offset * direction
             self._submit_prefetch(idx)
 
-        # Also prefetch a few in the opposite direction for direction changes
-        for offset in range(1, min(4, self.prefetch_count)):
-            idx = current_idx - offset * direction
-            self._submit_prefetch(idx)
+        # # Also prefetch a few in the opposite direction for direction changes
+        # for offset in range(1, min(4, self.prefetch_count)):
+        #     idx = current_idx - offset * direction
+        #     self._submit_prefetch(idx)
 
     def _update_access_pattern(self, index: int) -> int:
         """Update and return the predicted prefetch direction."""
@@ -561,9 +561,6 @@ def load_video_frames_from_jpg_images(
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
-    # New parameters
-    prefetch_count=16,
-    cache_size=32,
 ):
     """
     Load the video frames from a directory of JPEG files ("<frame_index>.jpg" format).
@@ -609,8 +606,6 @@ def load_video_frames_from_jpg_images(
             img_mean=img_mean,
             img_std=img_std,
             compute_device=compute_device,
-            prefetch_count=prefetch_count,
-            cache_size=cache_size,
         )
         return loader, loader.video_height, loader.video_width
 
