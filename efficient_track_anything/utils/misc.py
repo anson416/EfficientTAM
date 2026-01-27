@@ -5,9 +5,12 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import threading
 import warnings
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import OrderedDict
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Thread
+from typing import Dict, Optional
 
 import numpy as np
 import torch
@@ -178,6 +181,177 @@ class AsyncVideoFrameLoader:
         return len(self.images)
 
 
+class PrefetchVideoFrameLoader:
+    """
+    A video frame loader that prefetches frames ahead of the current access position.
+    Balances memory usage and loading latency by:
+    1. Using a bounded LRU cache
+    2. Prefetching frames in the predicted direction of access
+    3. Optionally using CPU memory as intermediate storage
+    """
+
+    def __init__(
+        self,
+        img_paths,
+        image_size,
+        offload_video_to_cpu,
+        img_mean,
+        img_std,
+        compute_device,
+        prefetch_count: int = 16,  # Number of frames to prefetch ahead
+        cache_size: int = 32,  # Maximum frames in cache
+        num_workers: int = 4,  # Parallel loading threads
+    ):
+        self.img_paths = img_paths
+        self.image_size = image_size
+        self.offload_video_to_cpu = offload_video_to_cpu
+        self.img_mean = img_mean
+        self.img_std = img_std
+        self.compute_device = compute_device
+        self.prefetch_count = prefetch_count
+        self.cache_size = cache_size
+
+        # LRU cache for loaded frames
+        self.cache: OrderedDict[int, torch.Tensor] = OrderedDict()
+        self.cache_lock = threading.Lock()
+
+        # Prefetch management
+        self.prefetch_executor = ThreadPoolExecutor(max_workers=num_workers)
+        self.prefetch_futures: Dict[int, Future] = {}
+        self.prefetch_lock = threading.Lock()
+
+        # Access pattern tracking
+        self.last_accessed_idx = -1
+        self.prefetch_direction = 1  # 1 for forward, -1 for reverse
+
+        # Video dimensions (set on first load)
+        self.video_height: Optional[int] = None
+        self.video_width: Optional[int] = None
+
+        # Load first frame synchronously to get dimensions
+        self._ensure_frame_loaded(0)
+
+    def _load_single_frame(self, index: int) -> torch.Tensor:
+        """Load and preprocess a single frame."""
+        img_pil = Image.open(self.img_paths[index])
+        img_np = np.array(
+            img_pil.convert("RGB").resize((self.image_size, self.image_size))
+        )
+
+        if img_np.dtype == np.uint8:
+            img_np = img_np / 255.0
+        else:
+            raise RuntimeError(f"Unknown image dtype: {img_np.dtype}")
+
+        img = torch.from_numpy(img_np).permute(2, 0, 1).float()
+        video_width, video_height = img_pil.size
+
+        # Set dimensions on first load
+        if self.video_height is None:
+            self.video_height = video_height
+            self.video_width = video_width
+
+        # Normalize
+        img -= self.img_mean
+        img /= self.img_std
+
+        # Keep on CPU for cache (transfer to GPU on access if needed)
+        return img
+
+    def _ensure_frame_loaded(self, index: int) -> torch.Tensor:
+        """Ensure a frame is loaded, either from cache, prefetch, or sync load."""
+        # Check cache first
+        with self.cache_lock:
+            if index in self.cache:
+                self.cache.move_to_end(index)
+                return self.cache[index]
+
+        # Check prefetch futures
+        future = None
+        with self.prefetch_lock:
+            if index in self.prefetch_futures:
+                future = self.prefetch_futures.pop(index)
+
+        if future is not None:
+            img = future.result()
+        else:
+            # Load synchronously
+            img = self._load_single_frame(index)
+
+        # Add to cache
+        with self.cache_lock:
+            self.cache[index] = img
+            self.cache.move_to_end(index)
+            self._evict_if_needed()
+
+        return img
+
+    def _evict_if_needed(self):
+        """Evict oldest frames if cache exceeds size limit. Must hold cache_lock."""
+        while len(self.cache) > self.cache_size:
+            evicted_idx, _ = self.cache.popitem(last=False)
+            # Cancel any pending prefetch for evicted frame region
+            # (optional optimization)
+
+    def _start_prefetch(self, current_idx: int, direction: int):
+        """Start prefetching frames in the given direction."""
+        with self.prefetch_lock:
+            for offset in range(1, self.prefetch_count + 1):
+                idx = current_idx + offset * direction
+                if 0 <= idx < len(self.img_paths):
+                    # Skip if already cached or being prefetched
+                    with self.cache_lock:
+                        if idx in self.cache:
+                            continue
+                    if idx in self.prefetch_futures:
+                        continue
+
+                    future = self.prefetch_executor.submit(
+                        self._load_single_frame, idx
+                    )
+                    self.prefetch_futures[idx] = future
+
+    def _update_direction(self, index: int):
+        """Update prefetch direction based on access pattern."""
+        if self.last_accessed_idx >= 0:
+            if index > self.last_accessed_idx:
+                self.prefetch_direction = 1
+            elif index < self.last_accessed_idx:
+                self.prefetch_direction = -1
+            # If equal, keep previous direction
+        self.last_accessed_idx = index
+
+    def __getitem__(self, index: int) -> torch.Tensor:
+        self._update_direction(index)
+
+        img = self._ensure_frame_loaded(index)
+
+        # Start prefetching in predicted direction
+        self._start_prefetch(index, self.prefetch_direction)
+
+        # Transfer to GPU if needed
+        if not self.offload_video_to_cpu:
+            img = img.to(self.compute_device, non_blocking=True)
+
+        return img
+
+    def __len__(self) -> int:
+        return len(self.img_paths)
+
+    def cleanup(self):
+        """Clean up resources."""
+        self.prefetch_executor.shutdown(wait=False)
+        with self.prefetch_lock:
+            for future in self.prefetch_futures.values():
+                future.cancel()
+            self.prefetch_futures.clear()
+        with self.cache_lock:
+            self.cache.clear()
+
+    def __del__(self):
+        self.cleanup()
+
+
 def load_video_frames(
     video_path,
     image_size,
@@ -230,6 +404,9 @@ def load_video_frames_from_jpg_images(
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
+    # New parameters
+    prefetch_count=16,
+    cache_size=32,
 ):
     """
     Load the video frames from a directory of JPEG files ("<frame_index>.jpg" format).
@@ -268,15 +445,17 @@ def load_video_frames_from_jpg_images(
     img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
 
     if async_loading_frames:
-        lazy_images = AsyncVideoFrameLoader(
-            img_paths,
-            image_size,
-            offload_video_to_cpu,
-            img_mean,
-            img_std,
-            compute_device,
+        loader = PrefetchVideoFrameLoader(
+            img_paths=img_paths,
+            image_size=image_size,
+            offload_video_to_cpu=offload_video_to_cpu,
+            img_mean=img_mean,
+            img_std=img_std,
+            compute_device=compute_device,
+            prefetch_count=prefetch_count,
+            cache_size=cache_size,
         )
-        return lazy_images, lazy_images.video_height, lazy_images.video_width
+        return loader, loader.video_height, loader.video_width
 
     def _load_one(idx: int, path: str):
         img, h, w = _load_img_as_tensor(path, image_size)
