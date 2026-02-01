@@ -173,8 +173,8 @@ class PrefetchVideoFrameLoader:
         img_mean: torch.Tensor,
         img_std: torch.Tensor,
         compute_device: torch.device,
-        prefetch_count: int = 32,
-        cache_size: int = 64,
+        prefetch_count: int = 16,
+        cache_size: int = 32,
         num_workers: int = 4,
     ):
         # Immutable configuration (safe to access from any thread)
