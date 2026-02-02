@@ -55,8 +55,8 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         offload_video_to_cpu=False,
         offload_state_to_cpu=False,
         async_loading_frames=False,
-        prefetch_count=16,
-        cache_size=32,
+        prefetch_count=8,
+        cache_size=16,
         num_workers=4,
     ):
         """Initialize an inference state."""
