@@ -1075,15 +1075,6 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
                 )
                 updated_frames.append((frame_idx, video_res_masks))
 
-        # Clear all frames for the removed object
-        removed_obj_output = inference_state["output_dict_per_obj"].pop(
-            old_obj_idx_to_rm, {}
-        )
-        # Explicitly delete tensors
-        for storage_key in removed_obj_output:
-            removed_obj_output[storage_key].clear()
-        del removed_obj_output
-
         return inference_state["obj_ids"], updated_frames
 
     def _clear_non_cond_mem_around_input(self, inference_state, frame_idx):
