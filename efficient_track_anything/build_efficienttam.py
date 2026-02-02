@@ -99,6 +99,7 @@ def build_efficienttam_video_predictor(
     hydra_overrides_extra=[],
     apply_postprocessing=True,
     vos_optimized=False,
+    max_kept_frames=16,
     **kwargs,
 ):
     if (
@@ -112,11 +113,13 @@ def build_efficienttam_video_predictor(
 
     hydra_overrides = [
         "++model._target_=efficient_track_anything.efficienttam_video_predictor.EfficientTAMVideoPredictor",
+        f"++model.max_kept_frames={max_kept_frames}",
     ]
     if vos_optimized:
         hydra_overrides = [
             "++model._target_=efficient_track_anything.efficienttam_video_predictor.EfficientTAMVideoPredictorVOS",
             "++model.compile_image_encoder=True",  # Let efficienttam_base handle this
+            f"++model.max_kept_frames={max_kept_frames}",
         ]
 
     if apply_postprocessing:

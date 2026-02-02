@@ -517,6 +517,9 @@ def load_video_frames(
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
+    prefetch_count=16,
+    cache_size=32,
+    num_workers=4,
 ):
     """
     Load the video frames from video_path. The frames are resized to image_size as in
@@ -546,6 +549,9 @@ def load_video_frames(
             img_std=img_std,
             async_loading_frames=async_loading_frames,
             compute_device=compute_device,
+            prefetch_count=prefetch_count,
+            cache_size=cache_size,
+            num_workers=num_workers,
         )
     else:
         raise NotImplementedError(
@@ -561,6 +567,9 @@ def load_video_frames_from_jpg_images(
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
+    prefetch_count=16,
+    cache_size=32,
+    num_workers=4,
 ):
     """
     Load the video frames from a directory of JPEG files ("<frame_index>.jpg" format).
@@ -606,6 +615,9 @@ def load_video_frames_from_jpg_images(
             img_mean=img_mean,
             img_std=img_std,
             compute_device=compute_device,
+            prefetch_count=prefetch_count,
+            cache_size=cache_size,
+            num_workers=num_workers,
         )
         return loader, loader.video_height, loader.video_width
 

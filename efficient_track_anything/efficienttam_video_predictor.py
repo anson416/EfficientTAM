@@ -35,6 +35,8 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         # if `add_all_frames_to_correct_as_cond` is True, we also append to the conditioning frame list any frame that receives a later correction click
         # if `add_all_frames_to_correct_as_cond` is False, we conditioning frame list to only use those initial conditioning frames
         add_all_frames_to_correct_as_cond=False,
+        # maximum number of frames to keep in the output window (affects memory usage for multi-object tracking)
+        max_kept_frames=16,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -44,6 +46,7 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         self.add_all_frames_to_correct_as_cond = (
             add_all_frames_to_correct_as_cond
         )
+        self.max_kept_frames = max_kept_frames
 
     @torch.inference_mode()
     def init_state(
@@ -52,6 +55,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         offload_video_to_cpu=False,
         offload_state_to_cpu=False,
         async_loading_frames=False,
+        prefetch_count=16,
+        cache_size=32,
+        num_workers=4,
     ):
         """Initialize an inference state."""
         compute_device = self.device  # device of the model
@@ -61,6 +67,9 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             offload_video_to_cpu=offload_video_to_cpu,
             async_loading_frames=async_loading_frames,
             compute_device=compute_device,
+            prefetch_count=prefetch_count,
+            cache_size=cache_size,
+            num_workers=num_workers,
         )
         inference_state = {}
         inference_state["images"] = images
@@ -690,7 +699,7 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
 
                     # Reference: https://github.com/facebookresearch/sam2/issues/196#issuecomment-2286352777
                     # (Hacky) Delete old state data to clear space after '_run_single_frame_inference'
-                    keep = 16
+                    keep = self.max_kept_frames
                     old_frame_idxs = [
                         idx
                         for idx in obj_output_dict[storage_key].keys()
