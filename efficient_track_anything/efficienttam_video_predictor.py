@@ -1053,6 +1053,15 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         _map_keys(inference_state["temp_output_dict_per_obj"])
         _map_keys(inference_state["frames_tracked_per_obj"])
 
+        # Clear all frames for the removed object
+        removed_obj_output = inference_state["output_dict_per_obj"].pop(
+            old_obj_idx_to_rm, {}
+        )
+        # Explicitly delete tensors
+        for storage_key in removed_obj_output:
+            removed_obj_output[storage_key].clear()
+        del removed_obj_output
+
         # Step 3: Further collect the outputs on those frames in `obj_input_frames_inds`, which
         # could show an updated mask for objects previously occluded by the object being removed
         if need_output:
