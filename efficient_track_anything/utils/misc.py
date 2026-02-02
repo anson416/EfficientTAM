@@ -567,8 +567,8 @@ def load_video_frames_from_jpg_images(
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
-    prefetch_count=16,
-    cache_size=32,
+    prefetch_count=8,
+    cache_size=16,
     num_workers=4,
 ):
     """
