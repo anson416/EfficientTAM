@@ -16,7 +16,9 @@ import torch.nn.functional as F
 from efficient_track_anything.utils.misc import mask_to_box
 
 
-def select_closest_cond_frames(frame_idx, cond_frame_outputs, max_cond_frame_num):
+def select_closest_cond_frames(
+    frame_idx, cond_frame_outputs, max_cond_frame_num
+):
     """
     Select up to `max_cond_frame_num` conditioning frames from `cond_frame_outputs`
     that are temporally closest to the current frame at `frame_idx`. Here, we take
@@ -29,20 +31,29 @@ def select_closest_cond_frames(frame_idx, cond_frame_outputs, max_cond_frame_num
     - selected_outputs: selected items (keys & values) from `cond_frame_outputs`.
     - unselected_outputs: items (keys & values) not selected in `cond_frame_outputs`.
     """
-    if max_cond_frame_num == -1 or len(cond_frame_outputs) <= max_cond_frame_num:
+    if (
+        max_cond_frame_num == -1
+        or len(cond_frame_outputs) <= max_cond_frame_num
+    ):
         selected_outputs = cond_frame_outputs
         unselected_outputs = {}
     else:
-        assert max_cond_frame_num >= 2, "we should allow using 2+ conditioning frames"
+        assert max_cond_frame_num >= 2, (
+            "we should allow using 2+ conditioning frames"
+        )
         selected_outputs = {}
 
         # the closest conditioning frame before `frame_idx` (if any)
-        idx_before = max((t for t in cond_frame_outputs if t < frame_idx), default=None)
+        idx_before = max(
+            (t for t in cond_frame_outputs if t < frame_idx), default=None
+        )
         if idx_before is not None:
             selected_outputs[idx_before] = cond_frame_outputs[idx_before]
 
         # the closest conditioning frame after `frame_idx` (if any)
-        idx_after = min((t for t in cond_frame_outputs if t >= frame_idx), default=None)
+        idx_after = min(
+            (t for t in cond_frame_outputs if t >= frame_idx), default=None
+        )
         if idx_after is not None:
             selected_outputs[idx_after] = cond_frame_outputs[idx_after]
 
@@ -53,9 +64,13 @@ def select_closest_cond_frames(frame_idx, cond_frame_outputs, max_cond_frame_num
             (t for t in cond_frame_outputs if t not in selected_outputs),
             key=lambda x: abs(x - frame_idx),
         )[:num_remain]
-        selected_outputs.update((t, cond_frame_outputs[t]) for t in inds_remain)
+        selected_outputs.update(
+            (t, cond_frame_outputs[t]) for t in inds_remain
+        )
         unselected_outputs = {
-            t: v for t, v in cond_frame_outputs.items() if t not in selected_outputs
+            t: v
+            for t, v in cond_frame_outputs.items()
+            if t not in selected_outputs
         }
 
     return selected_outputs, unselected_outputs
@@ -186,13 +201,17 @@ def sample_box_points(
         max_dx = torch.min(bbox_w * noise, noise_bound)
         max_dy = torch.min(bbox_h * noise, noise_bound)
         box_noise = 2 * torch.rand(B, 1, 4, device=device) - 1
-        box_noise = box_noise * torch.stack((max_dx, max_dy, max_dx, max_dy), dim=-1)
+        box_noise = box_noise * torch.stack(
+            (max_dx, max_dy, max_dx, max_dy), dim=-1
+        )
 
         box_coords = box_coords + box_noise
         img_bounds = (
             torch.tensor([W, H, W, H], device=device) - 1
         )  # uncentered pixel coords
-        box_coords.clamp_(torch.zeros_like(img_bounds), img_bounds)  # In place clamping
+        box_coords.clamp_(
+            torch.zeros_like(img_bounds), img_bounds
+        )  # In place clamping
 
     box_coords = box_coords.reshape(-1, 2, 2)  # always 2 points
     box_labels = box_labels.reshape(-1, 2)
@@ -216,7 +235,9 @@ def sample_random_points_from_errors(gt_masks, pred_masks, num_pt=1):
     if pred_masks is None:  # if pred_masks is not provided, treat it as empty
         pred_masks = torch.zeros_like(gt_masks)
     assert gt_masks.dtype == torch.bool and gt_masks.size(1) == 1
-    assert pred_masks.dtype == torch.bool and pred_masks.shape == gt_masks.shape
+    assert (
+        pred_masks.dtype == torch.bool and pred_masks.shape == gt_masks.shape
+    )
     assert num_pt >= 0
 
     B, _, H_im, W_im = gt_masks.shape
@@ -269,7 +290,9 @@ def sample_one_point_from_error_center(gt_masks, pred_masks, padding=True):
     if pred_masks is None:
         pred_masks = torch.zeros_like(gt_masks)
     assert gt_masks.dtype == torch.bool and gt_masks.size(1) == 1
-    assert pred_masks.dtype == torch.bool and pred_masks.shape == gt_masks.shape
+    assert (
+        pred_masks.dtype == torch.bool and pred_masks.shape == gt_masks.shape
+    )
 
     B, _, _, W_im = gt_masks.shape
     device = gt_masks.device
@@ -292,8 +315,12 @@ def sample_one_point_from_error_center(gt_masks, pred_masks, padding=True):
             fn_mask = np.pad(fn_mask, ((1, 1), (1, 1)), "constant")
             fp_mask = np.pad(fp_mask, ((1, 1), (1, 1)), "constant")
         # compute the distance of each point in FN/FP region to its boundary
-        fn_mask_dt = cv2.distanceTransform(fn_mask.astype(np.uint8), cv2.DIST_L2, 0)
-        fp_mask_dt = cv2.distanceTransform(fp_mask.astype(np.uint8), cv2.DIST_L2, 0)
+        fn_mask_dt = cv2.distanceTransform(
+            fn_mask.astype(np.uint8), cv2.DIST_L2, 0
+        )
+        fp_mask_dt = cv2.distanceTransform(
+            fp_mask.astype(np.uint8), cv2.DIST_L2, 0
+        )
         if padding:
             fn_mask_dt = fn_mask_dt[1:-1, 1:-1]
             fp_mask_dt = fp_mask_dt[1:-1, 1:-1]
