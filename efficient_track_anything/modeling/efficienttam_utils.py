@@ -38,8 +38,8 @@ def select_closest_cond_frames(
         selected_outputs = cond_frame_outputs
         unselected_outputs = {}
     else:
-        assert max_cond_frame_num >= 2, (
-            "we should allow using 2+ conditioning frames"
+        assert max_cond_frame_num >= 1, (
+            "we should allow using 1+ conditioning frames"
         )
         selected_outputs = {}
 
@@ -51,15 +51,16 @@ def select_closest_cond_frames(
             selected_outputs[idx_before] = cond_frame_outputs[idx_before]
 
         # the closest conditioning frame after `frame_idx` (if any)
-        idx_after = min(
-            (t for t in cond_frame_outputs if t >= frame_idx), default=None
-        )
-        if idx_after is not None:
-            selected_outputs[idx_after] = cond_frame_outputs[idx_after]
+        if len(selected_outputs) < max_cond_frame_num:
+            idx_after = min(
+                (t for t in cond_frame_outputs if t >= frame_idx), default=None
+            )
+            if idx_after is not None:
+                selected_outputs[idx_after] = cond_frame_outputs[idx_after]
 
         # add other temporally closest conditioning frames until reaching a total
         # of `max_cond_frame_num` conditioning frames.
-        num_remain = max_cond_frame_num - len(selected_outputs)
+        num_remain = max(max_cond_frame_num - len(selected_outputs), 0)
         inds_remain = sorted(
             (t for t in cond_frame_outputs if t not in selected_outputs),
             key=lambda x: abs(x - frame_idx),
