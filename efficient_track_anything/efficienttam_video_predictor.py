@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from collections import OrderedDict
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -36,7 +37,7 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
         # if `add_all_frames_to_correct_as_cond` is False, we conditioning frame list to only use those initial conditioning frames
         add_all_frames_to_correct_as_cond=False,
         # maximum number of frames to keep in the output window (affects memory usage for multi-object tracking)
-        max_kept_frames=16,
+        max_kept_frames: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -47,6 +48,15 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
             add_all_frames_to_correct_as_cond
         )
         self.max_kept_frames = max_kept_frames
+
+        # Print configuration
+        print(
+            f"{self.__class__.__name__}:\n"
+            f"  max_cond_frames_in_attn={self.max_cond_frames_in_attn}\n"
+            f"  max_obj_ptrs_in_encoder={self.max_obj_ptrs_in_encoder}\n"
+            f"  add_all_frames_to_correct_as_cond={self.add_all_frames_to_correct_as_cond}\n"
+            f"  max_kept_frames={self.max_kept_frames}\n"
+        )
 
     @torch.inference_mode()
     def init_state(
@@ -699,20 +709,26 @@ class EfficientTAMVideoPredictor(EfficientTAMBase):
 
                     # Reference: https://github.com/facebookresearch/sam2/issues/196#issuecomment-2286352777
                     # (Hacky) Delete old state data to clear space after '_run_single_frame_inference'
-                    keep = self.max_kept_frames
-                    old_frame_idxs = [
-                        idx
-                        for idx in obj_output_dict[storage_key].keys()
-                        if (
-                            (not reverse and idx < frame_idx - keep)
-                            or (reverse and idx > frame_idx + keep)
-                        )
-                    ]
-                    for old_idx in old_frame_idxs:
-                        for obj_out in inference_state[
-                            "output_dict_per_obj"
-                        ].values():
-                            obj_out[storage_key].pop(old_idx, None)
+                    if self.max_kept_frames is not None:
+                        old_frame_idxs = [
+                            idx
+                            for idx in obj_output_dict[storage_key].keys()
+                            if (
+                                (
+                                    not reverse
+                                    and idx < frame_idx - self.max_kept_frames
+                                )
+                                or (
+                                    reverse
+                                    and idx > frame_idx + self.max_kept_frames
+                                )
+                            )
+                        ]
+                        for old_idx in old_frame_idxs:
+                            for obj_out in inference_state[
+                                "output_dict_per_obj"
+                            ].values():
+                                obj_out[storage_key].pop(old_idx, None)
 
                 inference_state["frames_tracked_per_obj"][obj_idx][
                     frame_idx
